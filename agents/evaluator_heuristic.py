@@ -29,7 +29,7 @@ class HeuristicEvaluatorAgent:
             "responsive_design": {"weight": 0.1, "required": False}
         }
     
-    def evaluate_chart(self, chart_spec: Dict[str, Any]) -> Tuple[float, List[str]]:
+    def evaluate_chart(self, chart_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate a chart specification using heuristic rules.
         
@@ -37,14 +37,22 @@ class HeuristicEvaluatorAgent:
             chart_spec (Dict[str, Any]): Vega-Lite chart specification
             
         Returns:
-            Tuple[float, List[str]]: Score (0-10) and list of issue tags
+            Dict[str, Any]: Detailed evaluation results
         """
         score = 0.0
         issues = []
+        criterion_scores = {}
+        criterion_details = {}
         
         # Check if chart spec is valid
         if not self._is_valid_chart_spec(chart_spec):
-            return 0.0, ["invalid_chart_spec"]
+            return {
+                "score": 0.0,
+                "issues": ["invalid_chart_spec"],
+                "criterion_scores": {},
+                "criterion_details": {},
+                "chart_valid": False
+            }
         
         # Evaluate each criterion
         for criterion, config in self.criteria.items():
@@ -52,15 +60,38 @@ class HeuristicEvaluatorAgent:
                 criterion, chart_spec, config
             )
             
+            criterion_scores[criterion] = criterion_score
+            criterion_details[criterion] = {
+                "score": criterion_score,
+                "issues": criterion_issues,
+                "weight": config["weight"],
+                "required": config["required"],
+                "weighted_score": criterion_score * config["weight"]
+            }
+            
             if criterion_score == 0 and config["required"]:
                 issues.extend(criterion_issues)
                 if "invalid_input" in criterion_issues:
-                    return 0.0, ["invalid_input"]
+                    return {
+                        "score": 0.0,
+                        "issues": ["invalid_input"],
+                        "criterion_scores": criterion_scores,
+                        "criterion_details": criterion_details,
+                        "chart_valid": False
+                    }
             
             score += criterion_score * config["weight"]
             issues.extend(criterion_issues)
         
-        return min(score * 10, 10.0), issues
+        return {
+            "score": min(score * 10, 10.0),
+            "issues": list(set(issues)),  # Remove duplicates
+            "criterion_scores": criterion_scores,
+            "criterion_details": criterion_details,
+            "chart_valid": True,
+            "raw_score": score,
+            "max_possible_score": 1.0
+        }
     
     def _is_valid_chart_spec(self, chart_spec: Dict[str, Any]) -> bool:
         """Check if chart specification has basic required structure."""
@@ -187,23 +218,28 @@ class HeuristicEvaluatorAgent:
         if not chart_spec:
             raise ValueError("chart_spec is required in state")
         
-        score, issues = self.evaluate_chart(chart_spec)
+        evaluation_results = self.evaluate_chart(chart_spec)
         
         # Determine if clarifier should be triggered
-        should_clarify = score == 0 and "invalid_input" in issues
+        should_clarify = evaluation_results["score"] == 0 and "invalid_input" in evaluation_results["issues"]
         
         return {
             **state,
-            "heuristic_score": score,
-            "heuristic_issues": issues,
+            "heuristic_score": evaluation_results["score"],
+            "heuristic_issues": evaluation_results["issues"],
             "should_clarify": should_clarify,
             "agent_outputs": {
                 **state.get("agent_outputs", {}),
                 "heuristic_evaluator": {
-                    "score": score,
-                    "issues": issues,
+                    "score": evaluation_results["score"],
+                    "issues": evaluation_results["issues"],
                     "should_clarify": should_clarify,
-                    "status": "completed"
+                    "status": "completed",
+                    "criterion_scores": evaluation_results["criterion_scores"],
+                    "criterion_details": evaluation_results["criterion_details"],
+                    "chart_valid": evaluation_results["chart_valid"],
+                    "raw_score": evaluation_results["raw_score"],
+                    "max_possible_score": evaluation_results["max_possible_score"]
                 }
             }
         }

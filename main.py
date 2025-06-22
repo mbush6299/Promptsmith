@@ -63,9 +63,16 @@ class PromptsmithOrchestrator:
         # Initialize state
         state = {
             "user_query": user_query,
+            "max_iterations": max_iterations,
             "iteration": 1,
             "agent_outputs": {},
-            "iteration_history": []
+            "iteration_history": [],
+            "progress": {
+                "current_step": "initializing",
+                "current_agent": None,
+                "step_details": {},
+                "overall_progress": 0
+            }
         }
         
         best_result = None
@@ -79,22 +86,31 @@ class PromptsmithOrchestrator:
                 
                 # Update iteration number
                 state["iteration"] = iteration
+                state["progress"]["overall_progress"] = (iteration - 1) / max_iterations * 100
                 
                 # Step 1: Generate prompt
                 print("📝 Generating prompt...")
+                state["progress"]["current_step"] = "generating_prompt"
+                state["progress"]["current_agent"] = "prompt_generator"
                 state = self.prompt_generator.run(state)
                 
                 # Step 2: Build chart
                 print("📊 Building chart...")
+                state["progress"]["current_step"] = "building_chart"
+                state["progress"]["current_agent"] = "chart_builder"
                 state = self.chart_builder.run(state)
                 
                 # Step 3: Heuristic evaluation
                 print("🔍 Running heuristic evaluation...")
+                state["progress"]["current_step"] = "heuristic_evaluation"
+                state["progress"]["current_agent"] = "heuristic_evaluator"
                 state = self.heuristic_evaluator.run(state)
                 
                 # Check if clarification is needed
                 if state.get("should_clarify", False):
                     print("❓ Clarification needed, triggering clarifier...")
+                    state["progress"]["current_step"] = "clarification"
+                    state["progress"]["current_agent"] = "clarifier"
                     state = self.clarifier.run(state)
                     
                     if state.get("clarification_needed", False):
@@ -104,16 +120,21 @@ class PromptsmithOrchestrator:
                             "status": "clarification_needed",
                             "clarification_question": state.get("clarification_question"),
                             "suggested_query": state.get("suggested_query"),
-                            "iteration": iteration
+                            "iteration": iteration,
+                            "progress": state["progress"]
                         }
                 
                 # Step 4: LLM evaluation (only if heuristic passes)
                 if state.get("chart_valid", True):
                     print("🤖 Running LLM evaluation...")
+                    state["progress"]["current_step"] = "llm_evaluation"
+                    state["progress"]["current_agent"] = "llm_evaluator"
                     state = self.llm_evaluator.run(state)
                     
                     # Step 5: Scoring
                     print("📊 Calculating final score...")
+                    state["progress"]["current_step"] = "scoring"
+                    state["progress"]["current_agent"] = "scorer"
                     state = self.scorer.run(state)
                     
                     final_score = state.get("final_score", 0.0)
@@ -132,10 +153,12 @@ class PromptsmithOrchestrator:
                     # Step 6: Rewrite prompt for next iteration
                     if iteration < max_iterations:
                         print("✏️ Rewriting prompt for next iteration...")
+                        state["progress"]["current_step"] = "rewriting_prompt"
+                        state["progress"]["current_agent"] = "rewriter"
                         state = self.rewriter.run(state)
                         print(f"💡 Rewrite reason: {state.get('rewrite_reason')}")
                 
-                # Store iteration results
+                # Store detailed iteration results
                 iteration_result = {
                     "iteration": iteration,
                     "prompt": state.get("prompt", ""),
@@ -143,7 +166,49 @@ class PromptsmithOrchestrator:
                     "heuristic_score": state.get("heuristic_score", 0.0),
                     "llm_score": state.get("llm_score", 0.0),
                     "final_score": state.get("final_score", 0.0),
-                    "status": state.get("status", "unknown")
+                    "status": state.get("status", "unknown"),
+                    "agent_outputs": {
+                        "prompt_generator": {
+                            "prompt": state.get("prompt", ""),
+                            "from_cache": state.get("prompt_from_cache", False),
+                            "cache_hit": state.get("prompt_cache_hit", None)
+                        },
+                        "chart_builder": {
+                            "chart_spec": state.get("chart_spec", {}),
+                            "chart_type": state.get("chart_type", "unknown"),
+                            "from_cache": state.get("chart_from_cache", False),
+                            "cache_hit": state.get("chart_cache_hit", None)
+                        },
+                        "heuristic_evaluator": {
+                            "score": state.get("heuristic_score", 0.0),
+                            "issues": state.get("heuristic_issues", []),
+                            "chart_valid": state.get("chart_valid", True),
+                            "should_clarify": state.get("should_clarify", False)
+                        },
+                        "llm_evaluator": {
+                            "score": state.get("llm_score", 0.0),
+                            "feedback": state.get("llm_feedback", ""),
+                            "strengths": state.get("llm_strengths", []),
+                            "weaknesses": state.get("llm_weaknesses", [])
+                        },
+                        "scorer": {
+                            "final_score": state.get("final_score", 0.0),
+                            "score_breakdown": state.get("score_breakdown", {}),
+                            "should_continue": state.get("should_continue", True),
+                            "continue_reason": state.get("continue_reason", "")
+                        },
+                        "rewriter": {
+                            "new_prompt": state.get("new_prompt", ""),
+                            "rewrite_reason": state.get("rewrite_reason", ""),
+                            "improvements_made": state.get("improvements_made", []),
+                            "from_cache": state.get("rewrite_from_cache", False)
+                        }
+                    },
+                    "progress": {
+                        "step": state["progress"]["current_step"],
+                        "agent": state["progress"]["current_agent"],
+                        "overall_progress": (iteration / max_iterations) * 100
+                    }
                 }
                 
                 self.iteration_history.append(iteration_result)
@@ -153,6 +218,9 @@ class PromptsmithOrchestrator:
             
             # Return best result or final result
             result_state = best_result if best_result else state
+            result_state["progress"]["overall_progress"] = 100
+            result_state["progress"]["current_step"] = "complete"
+            result_state["progress"]["current_agent"] = None
             
             # Save to learning cache
             if result_state.get("final_score", 0.0) > 0:
@@ -175,7 +243,8 @@ class PromptsmithOrchestrator:
             return {
                 "status": "error",
                 "error": str(e),
-                "iteration": state.get("iteration", 1)
+                "iteration": state.get("iteration", 1),
+                "progress": state.get("progress", {})
             }
     
     def _format_final_output(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -200,7 +269,48 @@ class PromptsmithOrchestrator:
             "final_score": state.get("final_score", 0.0),
             "rewrite_reason": state.get("rewrite_reason", ""),
             "status": state.get("status", "unknown"),
-            "iteration_history": state.get("iteration_history", [])
+            "iteration_history": state.get("iteration_history", []),
+            "progress": state.get("progress", {}),
+            "agent_outputs": {
+                "prompt_generator": {
+                    "prompt": state.get("prompt", ""),
+                    "from_cache": state.get("prompt_from_cache", False),
+                    "cache_hit": state.get("prompt_cache_hit", None)
+                },
+                "chart_builder": {
+                    "chart_spec": state.get("chart_spec", {}),
+                    "chart_type": state.get("chart_type", "unknown"),
+                    "from_cache": state.get("chart_from_cache", False),
+                    "cache_hit": state.get("chart_cache_hit", None)
+                },
+                "heuristic_evaluator": {
+                    "score": state.get("heuristic_score", 0.0),
+                    "issues": state.get("heuristic_issues", []),
+                    "chart_valid": state.get("chart_valid", True),
+                    "should_clarify": state.get("should_clarify", False)
+                },
+                "llm_evaluator": {
+                    "score": state.get("llm_score", 0.0),
+                    "feedback": state.get("llm_feedback", ""),
+                    "strengths": state.get("llm_strengths", []),
+                    "weaknesses": state.get("llm_weaknesses", [])
+                },
+                "scorer": {
+                    "final_score": state.get("final_score", 0.0),
+                    "score_breakdown": state.get("score_breakdown", {}),
+                    "should_continue": state.get("should_continue", True),
+                    "continue_reason": state.get("continue_reason", "")
+                },
+                "rewriter": {
+                    "new_prompt": state.get("new_prompt", ""),
+                    "rewrite_reason": state.get("rewrite_reason", ""),
+                    "improvements_made": state.get("improvements_made", []),
+                    "from_cache": state.get("rewrite_from_cache", False)
+                }
+            },
+            "cache_stats": learning_cache.get_stats(),
+            "user_query": state.get("user_query", ""),
+            "max_iterations": state.get("max_iterations", 3)
         }
     
     def print_summary(self, result: Dict[str, Any]):

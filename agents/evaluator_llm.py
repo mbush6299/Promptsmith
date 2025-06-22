@@ -28,7 +28,7 @@ class LLMEvaluatorAgent:
             "data_representation_accuracy"
         ]
     
-    def evaluate_chart(self, chart_spec: Dict[str, Any], original_intent: str) -> Tuple[float, str]:
+    def evaluate_chart(self, chart_spec: Dict[str, Any], original_intent: str) -> Dict[str, Any]:
         """
         Evaluate a chart specification using LLM reasoning.
         
@@ -37,13 +37,13 @@ class LLMEvaluatorAgent:
             original_intent (str): Original user intent/query
             
         Returns:
-            Tuple[float, str]: Score (0-10) and feedback rationale
+            Dict[str, Any]: Detailed evaluation results
         """
         # Try LLM-based evaluation
         system_prompt = (
             "You are an expert chart evaluator. Given a Vega-Lite chart specification and the original user intent, "
             "evaluate the chart on a scale of 0 to 10 for how well it fulfills the intent, clarity, insight, and aesthetics. "
-            "Return your answer as a JSON object: {\"score\": <float 0-10>, \"feedback\": <string rationale>}"
+            "Return your answer as a JSON object: {\"score\": <float 0-10>, \"feedback\": <string rationale>, \"strengths\": [<list of strengths>], \"weaknesses\": [<list of weaknesses>]}"
         )
         user_message = (
             f"User intent: {original_intent}\n"
@@ -59,12 +59,20 @@ class LLMEvaluatorAgent:
             parsed = json.loads(llm_response)
             score = float(parsed.get("score", 0.0))
             feedback = parsed.get("feedback", "No feedback provided.")
-            return score, feedback
+            strengths = parsed.get("strengths", [])
+            weaknesses = parsed.get("weaknesses", [])
+            return {
+                "score": score,
+                "feedback": feedback,
+                "strengths": strengths,
+                "weaknesses": weaknesses,
+                "evaluation_method": "llm"
+            }
         except Exception:
             # If LLM fails or returns mock/error, fall back to rule-based simulation
             return self._simulate_llm_evaluation(chart_spec, original_intent)
     
-    def _simulate_llm_evaluation(self, chart_spec: Dict[str, Any], original_intent: str) -> Tuple[float, str]:
+    def _simulate_llm_evaluation(self, chart_spec: Dict[str, Any], original_intent: str) -> Dict[str, Any]:
         """
         Simulate LLM evaluation using rule-based logic.
         
@@ -73,35 +81,63 @@ class LLMEvaluatorAgent:
             original_intent (str): Original user intent
             
         Returns:
-            Tuple[float, str]: Simulated score and feedback
+            Dict[str, Any]: Simulated evaluation results
         """
         score = 7.0  # Base score
         feedback_parts = []
+        strengths = []
+        weaknesses = []
+        criterion_scores = {}
         
         # Evaluate appropriateness for intent
         intent_score, intent_feedback = self._evaluate_intent_appropriateness(chart_spec, original_intent)
         score += intent_score
         feedback_parts.append(intent_feedback)
+        criterion_scores["intent_appropriateness"] = intent_score
+        if intent_score > 0:
+            strengths.append("Appropriate chart type for the request")
+        else:
+            weaknesses.append("Chart type may not be optimal for the request")
         
         # Evaluate clarity and readability
         clarity_score, clarity_feedback = self._evaluate_clarity(chart_spec)
         score += clarity_score
         feedback_parts.append(clarity_feedback)
+        criterion_scores["clarity"] = clarity_score
+        if clarity_score > 0.5:
+            strengths.append("Clear and readable design")
+        else:
+            weaknesses.append("Could improve clarity and readability")
         
         # Evaluate insight potential
         insight_score, insight_feedback = self._evaluate_insight_potential(chart_spec)
         score += insight_score
         feedback_parts.append(insight_feedback)
+        criterion_scores["insight_potential"] = insight_score
+        if insight_score > 0.3:
+            strengths.append("Good potential for insights")
+        else:
+            weaknesses.append("Limited insight potential")
         
         # Evaluate aesthetic quality
         aesthetic_score, aesthetic_feedback = self._evaluate_aesthetics(chart_spec)
         score += aesthetic_score
         feedback_parts.append(aesthetic_feedback)
+        criterion_scores["aesthetics"] = aesthetic_score
+        if aesthetic_score > 0.5:
+            strengths.append("Good aesthetic quality")
+        else:
+            weaknesses.append("Could enhance visual appeal")
         
         # Evaluate data representation accuracy
         accuracy_score, accuracy_feedback = self._evaluate_data_accuracy(chart_spec)
         score += accuracy_score
         feedback_parts.append(accuracy_feedback)
+        criterion_scores["data_accuracy"] = accuracy_score
+        if accuracy_score > 0.8:
+            strengths.append("Accurate data representation")
+        else:
+            weaknesses.append("Data representation could be improved")
         
         # Normalize score to 0-10 range
         final_score = max(0.0, min(10.0, score))
@@ -109,7 +145,14 @@ class LLMEvaluatorAgent:
         # Combine feedback
         combined_feedback = " ".join(feedback_parts)
         
-        return final_score, combined_feedback
+        return {
+            "score": final_score,
+            "feedback": combined_feedback,
+            "strengths": strengths,
+            "weaknesses": weaknesses,
+            "criterion_scores": criterion_scores,
+            "evaluation_method": "simulated"
+        }
     
     def _evaluate_intent_appropriateness(self, chart_spec: Dict[str, Any], original_intent: str) -> Tuple[float, str]:
         """Evaluate if chart type is appropriate for the original intent."""
@@ -254,17 +297,24 @@ class LLMEvaluatorAgent:
         if not chart_spec:
             raise ValueError("chart_spec is required in state")
         
-        score, feedback = self.evaluate_chart(chart_spec, user_query)
+        evaluation_results = self.evaluate_chart(chart_spec, user_query)
         
         return {
             **state,
-            "llm_score": score,
-            "llm_feedback": feedback,
+            "llm_score": evaluation_results["score"],
+            "llm_feedback": evaluation_results["feedback"],
+            "strengths": evaluation_results["strengths"],
+            "weaknesses": evaluation_results["weaknesses"],
+            "criterion_scores": evaluation_results["criterion_scores"],
+            "evaluation_method": evaluation_results["evaluation_method"],
             "agent_outputs": {
                 **state.get("agent_outputs", {}),
                 "llm_evaluator": {
-                    "score": score,
-                    "feedback": feedback,
+                    "score": evaluation_results["score"],
+                    "feedback": evaluation_results["feedback"],
+                    "strengths": evaluation_results["strengths"],
+                    "weaknesses": evaluation_results["weaknesses"],
+                    "criterion_scores": evaluation_results["criterion_scores"],
                     "status": "completed"
                 }
             }

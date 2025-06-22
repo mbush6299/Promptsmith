@@ -21,7 +21,7 @@ class PromptGeneratorAgent:
         self.name = "prompt_generator"
         self.description = "Generates structured prompts for chart visualization from natural language queries"
     
-    def generate_prompt(self, user_query: str) -> str:
+    def generate_prompt(self, user_query: str) -> Dict[str, Any]:
         """
         Generate a visualization prompt from a user query.
         
@@ -29,13 +29,18 @@ class PromptGeneratorAgent:
             user_query (str): Natural language query from user
             
         Returns:
-            str: Structured prompt for chart generation
+            Dict[str, Any]: Prompt and metadata about generation
         """
         # First, check if we have a learned pattern for this query
         cached_prompt = learning_cache.suggest_prompt(user_query)
         if cached_prompt:
             print(f"🎯 Using cached prompt pattern for: {user_query[:50]}...")
-            return cached_prompt
+            return {
+                "prompt": cached_prompt,
+                "from_cache": True,
+                "cache_hit": "prompt_pattern",
+                "generation_method": "cache"
+            }
         
         # Try LLM-based prompt generation
         system_prompt = (
@@ -54,10 +59,25 @@ class PromptGeneratorAgent:
             temperature=0.2,
             max_tokens=300
         )
+        
         # If the LLM utility returns a mock or error, fall back to template
         if llm_prompt.startswith("[MOCK") or llm_prompt.startswith("[LLM ERROR"):
-            return self._create_prompt_template(user_query)
-        return llm_prompt.strip()
+            template_prompt = self._create_prompt_template(user_query)
+            return {
+                "prompt": template_prompt,
+                "from_cache": False,
+                "cache_hit": None,
+                "generation_method": "template",
+                "llm_fallback": True,
+                "llm_error": llm_prompt
+            }
+        
+        return {
+            "prompt": llm_prompt.strip(),
+            "from_cache": False,
+            "cache_hit": None,
+            "generation_method": "llm"
+        }
     
     def _create_prompt_template(self, user_query: str) -> str:
         """
@@ -101,16 +121,24 @@ class PromptGeneratorAgent:
         if not user_query:
             raise ValueError("user_query is required in state")
         
-        prompt = self.generate_prompt(user_query)
+        prompt_result = self.generate_prompt(user_query)
         
         return {
             **state,
-            "prompt": prompt,
+            "prompt": prompt_result["prompt"],
+            "prompt_from_cache": prompt_result["from_cache"],
+            "prompt_cache_hit": prompt_result["cache_hit"],
+            "prompt_generation_method": prompt_result["generation_method"],
             "agent_outputs": {
                 **state.get("agent_outputs", {}),
                 "prompt_generator": {
-                    "prompt": prompt,
-                    "status": "completed"
+                    "prompt": prompt_result["prompt"],
+                    "from_cache": prompt_result["from_cache"],
+                    "cache_hit": prompt_result["cache_hit"],
+                    "generation_method": prompt_result["generation_method"],
+                    "status": "completed",
+                    "llm_fallback": prompt_result.get("llm_fallback", False),
+                    "llm_error": prompt_result.get("llm_error", None)
                 }
             }
         }
