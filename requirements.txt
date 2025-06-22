@@ -1,0 +1,34 @@
+# Core dependencies for Promptsmith Chart Optimizer
+# Note: This is a basic setup - add LLM-specific packages as needed
+
+# Type hints and utilities
+typing-extensions>=4.0.0
+
+# OpenAI API integration
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# JSON handling (built-in, but listed for clarity)
+# json - built-in
+
+# For future LLM integration (uncomment as needed)
+# anthropic>=0.7.0
+# langchain>=0.1.0
+# langgraph>=0.1.0
+
+# For chart rendering (future enhancement)
+# altair>=5.0.0
+# vega-lite>=5.0.0
+
+# For data handling (future enhancement)
+# pandas>=2.0.0
+# numpy>=1.24.0
+
+# For testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# For development
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0 

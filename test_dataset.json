@@ -1,0 +1,64 @@
+[
+  {
+    "user_query": "Show me revenue by region over time",
+    "expected_chart_type": "line",
+    "expected_dimensions": ["region", "month"],
+    "expected_metric": "revenue"
+  },
+  {
+    "user_query": "Compare sales performance across departments",
+    "expected_chart_type": "bar",
+    "expected_dimensions": ["department"],
+    "expected_metric": "sales"
+  },
+  {
+    "user_query": "Display customer satisfaction trends",
+    "expected_chart_type": "line",
+    "expected_dimensions": ["time"],
+    "expected_metric": "customer satisfaction"
+  },
+  {
+    "user_query": "Show profit margins by product category for Q1 2024",
+    "expected_chart_type": "bar",
+    "expected_dimensions": ["product category"],
+    "expected_metric": "profit margin"
+  },
+  {
+    "user_query": "How many new users signed up each week?",
+    "expected_chart_type": "line",
+    "expected_dimensions": ["week"],
+    "expected_metric": "new users"
+  },
+  {
+    "user_query": "What is the distribution of order values?",
+    "expected_chart_type": "histogram",
+    "expected_dimensions": ["order value"],
+    "expected_metric": "order count"
+  },
+  {
+    "user_query": "Show average response time by support agent",
+    "expected_chart_type": "bar",
+    "expected_dimensions": ["support agent"],
+    "expected_metric": "average response time"
+  },
+  {
+    "user_query": "Visualize churn rate by month",
+    "expected_chart_type": "line",
+    "expected_dimensions": ["month"],
+    "expected_metric": "churn rate"
+  },
+  {
+    "user_query": "Show me all the data",
+    "expected_chart_type": null,
+    "expected_dimensions": [],
+    "expected_metric": null,
+    "clarification_needed": true
+  },
+  {
+    "user_query": "How is my business doing?",
+    "expected_chart_type": null,
+    "expected_dimensions": [],
+    "expected_metric": null,
+    "clarification_needed": true
+  }
+] 
