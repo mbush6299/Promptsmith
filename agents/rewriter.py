@@ -35,50 +35,53 @@ class PromptRewriterAgent:
         Returns:
             tuple[str, str]: (rewritten_prompt, rewrite_reason)
         """
-        # First, check if we have learned patterns for these issues
-        cache_suggestions = learning_cache.suggest_improvements(heuristic_issues)
+        # Debug logging
+        print(f"[REWRITER DEBUG] Original prompt: {prompt}")
+        print(f"[REWRITER DEBUG] Heuristic issues: {heuristic_issues}")
+        print(f"[REWRITER DEBUG] LLM feedback: {llm_feedback}")
+        print(f"[REWRITER DEBUG] Final score: {final_score}")
+        # Only use cache if score is low (<8.0)
+        cache_suggestions = []
+        if final_score < 8.0:
+            cache_suggestions = learning_cache.suggest_improvements(heuristic_issues)
         if cache_suggestions:
             print(f"🎯 Using cached improvement patterns for {len(heuristic_issues)} issues")
-            # Use the first suggestion as a starting point
             cached_suggestion = cache_suggestions[0]
-            rewrite_reason = f"Applied learned pattern: {cached_suggestion}"
-            
-            # Try to improve the prompt based on the suggestion
+            rewrite_reason = f"Applied learned pattern for issues: {', '.join(heuristic_issues)}. Suggestion: {cached_suggestion}"
             improved_prompt = self._apply_cached_suggestion(prompt, cached_suggestion)
-            return improved_prompt, rewrite_reason
-        
-        # Fall back to LLM-based rewriting
+            prompt_for_llm = improved_prompt
+        else:
+            prompt_for_llm = prompt
+        # Always allow LLM to rewrite, and encourage modern features
         system_prompt = (
             "You are a helpful assistant that rewrites visualization prompts to address "
             "specific issues and improve chart quality. Focus on clarity, specificity, "
-            "and addressing the feedback provided."
+            "modern color schemes, interactivity (tooltips, selection, hover), and responsive design. "
+            "Use the LLM evaluator's feedback to guide improvements."
         )
-        
         user_message = f"""
-        Original Prompt: {prompt}
-        
+        Original Prompt: {prompt_for_llm}
         Issues to Address:
         - Heuristic Issues: {', '.join(heuristic_issues) if heuristic_issues else 'None'}
         - LLM Feedback: {llm_feedback}
         - Current Score: {final_score}/10
-        
-        Please rewrite the prompt to address these issues and improve the chart specification.
-        Focus on making the prompt more specific, clear, and actionable.
+        Please rewrite the prompt to address these issues and improve the chart specification.\nFocus on making the prompt more specific, clear, actionable, and modern.\nExplicitly request modern color schemes, interactivity (tooltips, selection, hover), and responsive design if not already present."
         """
-        
         llm_response = chat_completion(
             messages=[{"role": "user", "content": user_message}],
             system_prompt=system_prompt,
             temperature=0.3,
             max_tokens=400
         )
-        
-        # If LLM fails, use template-based rewriting
         if llm_response.startswith("[MOCK") or llm_response.startswith("[LLM ERROR"):
-            return self._template_rewrite(prompt, heuristic_issues, llm_feedback, final_score)
-        
-        rewrite_reason = f"LLM rewrite based on {len(heuristic_issues)} issues and LLM feedback"
-        return llm_response.strip(), rewrite_reason
+            rewritten_prompt, rewrite_reason = self._template_rewrite(prompt_for_llm, heuristic_issues, llm_feedback, final_score)
+        else:
+            rewritten_prompt = llm_response.strip()
+            main_issues = ', '.join(heuristic_issues) if heuristic_issues else 'none'
+            feedback_summary = llm_feedback[:80] + ('...' if len(llm_feedback) > 80 else '')
+            rewrite_reason = f"LLM rewrite: addressed issues [{main_issues}] and feedback: '{feedback_summary}'"
+        print(f"[REWRITER DEBUG] Rewritten prompt: {rewritten_prompt}")
+        return rewritten_prompt, rewrite_reason
     
     def _apply_cached_suggestion(self, prompt: str, suggestion: str) -> str:
         """
@@ -156,22 +159,19 @@ class PromptRewriterAgent:
             final_score (float): Current final score
             iteration (int): Current iteration number
             max_iterations (int): Maximum allowed iterations
-            
+        
         Returns:
             tuple[bool, str]: (should_continue, reason)
         """
         if iteration >= max_iterations:
             return False, f"Reached maximum iterations ({max_iterations})"
-        
-        if final_score >= 9.0:
-            return False, "Achieved excellent score (≥9.0)"
-        
+        # Only stop if score is 9.5 or greater and at least one iteration has been output
+        if final_score >= 9.5 and iteration > 1:
+            return False, "Achieved excellent score (≥9.5)"
         if final_score >= 8.0 and iteration >= 2:
             return False, "Achieved good score (≥8.0) after multiple iterations"
-        
         if final_score < 3.0 and iteration >= 2:
             return False, "Score too low after multiple iterations"
-        
         return True, "Continuing optimization"
     
     def run(self, state: Dict[str, Any]) -> Dict[str, Any]:

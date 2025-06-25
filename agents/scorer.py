@@ -24,7 +24,7 @@ class ScoringAgent:
         self.llm_weight = 0.6
         
         # Thresholds
-        self.continue_threshold = 8.5  # Score above which to stop iterating
+        self.continue_threshold = 9.5  # Score above which to stop iterating
         self.max_iterations = 5  # Maximum number of iterations
     
     def calculate_final_score(self, heuristic_score: float, llm_score: float) -> float:
@@ -106,8 +106,8 @@ class ScoringAgent:
         if iteration >= self.max_iterations:
             return False, f"Maximum iterations ({self.max_iterations}) reached"
         
-        # Check if score meets the threshold
-        if final_score >= self.continue_threshold:
+        # Only stop if score is 9.5 or greater and at least one iteration has been output
+        if final_score >= self.continue_threshold and iteration > 1:
             return False, f"Target score ({self.continue_threshold}) achieved"
         
         # Check for critical issues that require clarification

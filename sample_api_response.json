@@ -1,0 +1,78 @@
+{
+  "success": true,
+  "data": {
+    "iteration": 2,
+    "prompt": "Create a line chart to visualize the monthly churn rate over a specified period. ...",
+    "chart_spec": {
+      "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+      "description": "A line chart showing the monthly churn rate over time.",
+      "title": "Monthly Churn Rate Over Time",
+      "data": {
+        "values": [
+          { "month": "Jan 2020", "customers_start": 1000, "customers_end": 950, "churned": 50 },
+          { "month": "Feb 2020", "customers_start": 950, "customers_end": 920, "churned": 30 }
+        ]
+      },
+      "transform": [
+        { "calculate": "(datum.churned / datum.customers_start) * 100", "as": "churn_rate" }
+      ],
+      "mark": "line",
+      "encoding": {
+        "x": { "field": "month", "type": "ordinal", "axis": { "title": "Month", "labelAngle": -45 }, "title": "X Axis" },
+        "y": { "field": "churn_rate", "type": "quantitative", "axis": { "title": "Churn Rate (%)" }, "title": "Y Axis" },
+        "color": { "value": "blue" },
+        "tooltip": [
+          { "field": "month", "type": "nominal", "title": "Month" },
+          { "field": "churn_rate", "type": "quantitative", "title": "Churn Rate (%)", "format": ".2f" }
+        ]
+      },
+      "width": 600,
+      "height": 400
+    },
+    "chart_image_url": "mock_chart_url.png",
+    "scores": { "heuristic": 9.0, "llm": 8.5 },
+    "final_score": 8.7,
+    "rewrite_reason": "",
+    "status": "Optimal",
+    "iteration_history": [
+      {
+        "iteration": 1,
+        "prompt": "Create a line chart to visualize the monthly churn rate over the last year. ...",
+        "chart_spec": {},
+        "heuristic_score": 7.0,
+        "llm_score": 8.5,
+        "final_score": 8.2,
+        "status": "Good quality",
+        "agent_outputs": {},
+        "educational_notes": {
+          "chart_type_choice": "Line charts are perfect for showing trends over time ...",
+          "data_visualization_principles": "Clarity First: ...",
+          "improvement_suggestions": "Consider using standard chart types ..."
+        },
+        "progress": {
+          "step": "rewriting_prompt",
+          "agent": "rewriter",
+          "overall_progress": 50.0
+        }
+      }
+    ],
+    "progress": {
+      "current_step": "complete",
+      "current_agent": null,
+      "step_details": {},
+      "overall_progress": 100
+    },
+    "agent_outputs": {},
+    "cache_stats": {
+      "total_runs": 4,
+      "query_patterns": 2,
+      "issue_patterns": 2,
+      "prompt_patterns": 2,
+      "chart_patterns": 2,
+      "avg_score": 8.5
+    },
+    "user_query": "What is my churn rate by month?",
+    "max_iterations": 2
+  },
+  "message": "Chart optimization completed successfully"
+} 

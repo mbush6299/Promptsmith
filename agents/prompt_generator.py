@@ -26,54 +26,44 @@ class PromptGeneratorAgent:
         Generate a visualization prompt from a user query.
         
         Args:
-            user_query (str): Natural language query from user
+            user_query (str): User's natural language query
             
         Returns:
-            Dict[str, Any]: Prompt and metadata about generation
+            Dict[str, Any]: Generated prompt and metadata
         """
-        # First, check if we have a learned pattern for this query
+        # Only use cache for exact matches to avoid generating identical prompts
         cached_prompt = learning_cache.suggest_prompt(user_query)
         if cached_prompt:
-            print(f"🎯 Using cached prompt pattern for: {user_query[:50]}...")
-            return {
-                "prompt": cached_prompt,
-                "from_cache": True,
-                "cache_hit": "prompt_pattern",
-                "generation_method": "cache"
-            }
+            # Double-check it's an exact match
+            query_hash = learning_cache._hash_query(user_query)
+            if query_hash in learning_cache.patterns["query_patterns"]:
+                cached_query = learning_cache.patterns["query_patterns"][query_hash]["query"]
+                if user_query.lower() == cached_query.lower():
+                    print(f"🎯 Using cached prompt for exact match: {user_query[:50]}...")
+                    return {
+                        "prompt": cached_prompt,
+                        "from_cache": True,
+                        "cache_hit": "exact_match",
+                        "generation_method": "cache"
+                    }
         
-        # Try LLM-based prompt generation
+        # Generate a new prompt using LLM
         system_prompt = (
-            "You are a helpful assistant that converts user requests into structured prompts "
-            "for chart specification generation. The prompt should be clear, concise, and designed "
-            "to elicit a high-quality Vega-Lite chart spec from an LLM."
+            "You are a helpful assistant that converts user queries into detailed visualization prompts. "
+            "Generate specific, actionable prompts that will help create effective charts. "
+            "Include details about chart type, data requirements, and styling preferences. "
+            "Return only the prompt text, no extra formatting."
         )
-        user_message = (
-            f"User query: {user_query}\n"
-            "Generate a prompt that will instruct an LLM to create a Vega-Lite chart specification "
-            "for this request."
-        )
-        llm_prompt = chat_completion(
+        user_message = f"Convert this user query into a detailed visualization prompt: {user_query}"
+        llm_response = chat_completion(
             messages=[{"role": "user", "content": user_message}],
             system_prompt=system_prompt,
-            temperature=0.2,
-            max_tokens=300
+            temperature=0.3,
+            max_tokens=200
         )
         
-        # If the LLM utility returns a mock or error, fall back to template
-        if llm_prompt.startswith("[MOCK") or llm_prompt.startswith("[LLM ERROR"):
-            template_prompt = self._create_prompt_template(user_query)
-            return {
-                "prompt": template_prompt,
-                "from_cache": False,
-                "cache_hit": None,
-                "generation_method": "template",
-                "llm_fallback": True,
-                "llm_error": llm_prompt
-            }
-        
         return {
-            "prompt": llm_prompt.strip(),
+            "prompt": llm_response.strip(),
             "from_cache": False,
             "cache_hit": None,
             "generation_method": "llm"

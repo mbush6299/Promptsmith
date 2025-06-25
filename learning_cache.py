@@ -120,6 +120,8 @@ class LearningCache:
                     "score": final_score
                 }
                 pattern["solutions"].append(solution)
+                # Prune to keep at most 20 highest scoring solutions
+                pattern["solutions"] = sorted(pattern["solutions"], key=lambda x: x["score"], reverse=True)[:20]
         
         # Learn prompt patterns
         if final_score >= 8.0:
@@ -134,62 +136,33 @@ class LearningCache:
         return hashlib.md5(query.lower().encode()).hexdigest()
     
     def suggest_prompt(self, user_query: str) -> Optional[str]:
-        """Suggest a prompt based on learned patterns."""
+        """Suggest a prompt based on learned patterns. Only use cache for exact matches."""
         query_hash = self._hash_query(user_query)
-        
-        # Check for exact match
         if query_hash in self.patterns["prompt_patterns"]:
             return self.patterns["prompt_patterns"][query_hash]
-        
-        # Check for similar patterns
-        similar_pattern = self._find_similar_query(user_query)
-        if similar_pattern:
-            return self.patterns["prompt_patterns"].get(similar_pattern)
-        
         return None
     
     def suggest_chart_spec(self, user_query: str) -> Optional[Dict[str, Any]]:
-        """Suggest a chart spec based on learned patterns."""
+        """Suggest a chart spec based on learned patterns. Only use cache for exact matches."""
         query_hash = self._hash_query(user_query)
-        
-        # Check for exact match
         if query_hash in self.patterns["chart_patterns"]:
             return self.patterns["chart_patterns"][query_hash]
-        
-        # Check for similar patterns
-        similar_pattern = self._find_similar_query(user_query)
-        if similar_pattern:
-            return self.patterns["chart_patterns"].get(similar_pattern)
-        
         return None
     
-    def suggest_improvements(self, heuristic_issues: List[str]) -> List[str]:
-        """Suggest improvements based on learned issue patterns."""
+    def suggest_improvements(self, heuristic_issues: List[str], final_score: float = 0.0) -> List[str]:
+        """Suggest improvements based on learned issue patterns. Only use cache if score is low (<8.0)."""
+        if final_score >= 8.0:
+            return []
         suggestions = []
-        
         for issue in heuristic_issues:
+            if not isinstance(issue, str):
+                continue  # Skip non-string issues
             if issue in self.patterns["issue_patterns"]:
                 pattern = self.patterns["issue_patterns"][issue]
                 if pattern["solutions"]:
-                    # Get the best solution
                     best_solution = max(pattern["solutions"], key=lambda x: x["score"])
                     suggestions.append(f"Based on previous runs, {issue} was resolved with: {best_solution['prompt'][:100]}...")
-        
         return suggestions
-    
-    def _find_similar_query(self, user_query: str) -> Optional[str]:
-        """Find a similar query in the cache."""
-        query_lower = user_query.lower()
-        
-        for query_hash, pattern in self.patterns["query_patterns"].items():
-            cached_query = pattern["query"].lower()
-            
-            # Simple similarity check (can be improved with more sophisticated NLP)
-            if any(word in cached_query for word in query_lower.split()) and \
-               any(word in query_lower for word in cached_query.split()):
-                return query_hash
-        
-        return None
     
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
@@ -203,11 +176,20 @@ class LearningCache:
         }
     
     def clear_cache(self):
-        """Clear the learning cache."""
+        """Clear all cached data and patterns."""
         self.cache = {"runs": [], "patterns": {}}
         for pattern_type in self.patterns:
             self.patterns[pattern_type] = {}
         self._save_cache()
+        print("🧠 Learning cache cleared successfully")
+    
+    def reset_patterns(self):
+        """Reset only the patterns while keeping run history."""
+        for pattern_type in self.patterns:
+            self.patterns[pattern_type] = {}
+        self.cache["patterns"] = {}
+        self._save_cache()
+        print("🔄 Patterns reset successfully")
 
 
 # Global cache instance
